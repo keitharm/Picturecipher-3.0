@@ -1,0 +1,33 @@
+{
+  "name": "picturecipher",
+  "version": "0.0.1",
+  "bin": {
+    "encrypt": "./bin/encrypt",
+    "decrypt": "./bin/decrypt"
+  },
+  "preferGlobal": true,
+  "description": "picturecipher",
+  "main": "index.js",
+  "dependencies": {
+    "charm": "^1.0.2",
+    "colors": "^1.1.2",
+    "commander": "^2.9.0",
+    "openpgp": "^2.4.0",
+    "pngjs": "^3.0.1",
+    "seededshuffle": "^0.1.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keitharm/Picturecipher-3.0.git"
+  },
+  "author": "Keith Armstrong",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/keitharm/Picturecipher-3.0/issues"
+  },
+  "homepage": "https://github.com/keitharm/Picturecipher-3.0#readme"
+}

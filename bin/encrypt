@@ -1,0 +1,172 @@
+#!/usr/bin/env node
+
+require('../polyfill');
+require('colors')
+const os     = require('os');
+const fs     = require("fs");
+const path   = require("path");
+const crypto = require('crypto');
+
+const PNG     = require("pngjs").PNG;
+const program = require('commander');
+const SeededShuffle = require('seededshuffle');
+
+const version = require('../package.json').version;
+
+// Control Cursor
+const charm = require('charm')();
+charm.pipe(process.stdout);
+
+let options = program
+  .version(version)
+  .usage('file [password]')
+  .description("Picturecipher encryption tool")
+  .option('-s, --silent', 'Hides progress output')
+  .parse(process.argv);
+
+if (options.args.length < 1) {
+  console.error("Error".red + ": No file provided");
+  program.help();
+}
+
+charm.cursor(false);
+
+// Base64 chars and translation table
+const original = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+const chars = {
+  'A': 0,   'B': 4,   'C': 8,   'D': 12,  'E': 16,  'F': 20,
+  'G': 24,  'H': 28,  'I': 32,  'J': 36,  'K': 40,  'L': 44,
+  'M': 48,  'N': 52,  'O': 56,  'P': 60,  'Q': 64,  'R': 68,
+  'S': 72,  'T': 76,  'U': 80,  'V': 84,  'W': 88,  'X': 92,
+  'Y': 96,  'Z': 100, 'a': 104, 'b': 108, 'c': 112, 'd': 116,
+  'e': 120, 'f': 124, 'g': 128, 'h': 132, 'i': 136, 'j': 140,
+  'k': 144, 'l': 148, 'm': 152, 'n': 156, 'o': 160, 'p': 164,
+  'q': 168, 'r': 172, 's': 176, 't': 180, 'u': 184, 'v': 188,
+  'w': 192, 'x': 196, 'y': 200, 'z': 204, '0': 208, '1': 212,
+  '2': 216, '3': 220, '4': 224, '5': 228, '6': 232, '7': 236,
+  '8': 240, '9': 244, '+': 248, '/': 252, '=': 255
+};
+
+// Shuffle original using provided seed to get cipher
+const cipher = SeededShuffle.shuffle(original.split(''), (options.args[1] || -1)).join('');
+
+if (!program.silent) console.log("Reading input file...");
+
+// Convert read in file to base64
+let content;
+try {
+  content = new Buffer(fs.readFileSync(options.args[0])).toString('base64');
+} catch(e) {
+  console.error("Error".red + ": Invalid file provided");
+  process.exit();
+}
+
+// Use tmp file if file is large
+let tmpFile = content.length > 1000000;
+
+// Calculate checksum
+let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
+
+// Calculate quickcheck
+let quickcheckHash = quickcheck(options.args[1]);
+
+// Perform swap
+content = swap(content, original, cipher);
+
+// Determine size of image file
+let len  = content.length;
+let dim  = Math.ceil(Math.sqrt((len + 64)/4)); // Calculate dimensions with meta data included
+let file = new PNG({width: dim, height: dim});
+
+let total = dim*dim*4;
+
+// Generate meta data string
+let meta = new Buffer([
+  version.replace(/\./g, '').toString(16).padStart(4, '0'),
+  (~~(Date.now()/1000)).toString(16).padStart(8, '0'),
+  String(quickcheckHash).slice(0, 16), 
+  String(checksum).slice(0, 16),
+  (total-content.length-64).toString(16).padStart(4, '0')
+].join('')).toString('base64');
+
+for (let i = 0; i < 16; i++) {
+
+  // Assign image data using translation table
+  // Offset by 64 indices since meta data takes up 64 bytes
+  file.data[i*4]     = chars[meta[i*4]];
+  file.data[i*4 + 1] = chars[meta[i*4 + 1]];
+  file.data[i*4 + 2] = chars[meta[i*4 + 2]];
+  file.data[i*4 + 3] = chars[meta[i*4 + 3]];
+}
+
+for (let i = 0; i < total; i++) {
+
+  // Show update every 1/100 complete
+  if (!program.silent && i % ~~(total/100) === 1) {
+    charm.erase('line');
+    process.stdout.write("Imagifying: [ 2 / 2 ] " + Math.ceil((i/total)*100) + "%");
+    charm.left(50);
+  }
+
+  // Assign image data using translation table
+  // Offset by 64 indices since meta data takes up 64 bytes
+  file.data[i*4 + 64] = chars[content[i*4]];
+  file.data[i*4 + 65] = chars[content[i*4 + 1]];
+  file.data[i*4 + 66] = chars[content[i*4 + 2]];
+  file.data[i*4 + 67] = chars[content[i*4 + 3]];
+}
+
+if (!program.silent) console.log("\nWriting encrypted file...");
+
+// Write encrypted file
+file.pack().pipe(fs.createWriteStream(process.cwd() + '/' + path.basename(options.args[0]) + ".enc.png"))
+charm.cursor(true);
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+
+function swap(input, from, to, hide=false) {
+  if (tmpFile) fs.closeSync(fs.openSync(os.tmpdir() + "/enc_tmpfile", 'w'));
+
+  let output = "";
+  let len = input.length;
+  for (let i = 0; i < len; i++) {
+    if (hide !== true && !program.silent && i % ~~(len/100) === 1) {
+
+      charm.erase('line');
+      process.stdout.write("Swap:       [ 1 / 2 ] " + Math.ceil((i/len)*100) + "%");
+      charm.left(50);
+    }
+    output += to[from.indexOf(input[i])];
+    if (tmpFile && output.length >= 1000000) {
+      fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", output);
+      output = "";
+    }
+  }
+
+  if (tmpFile && output.length > 0) {
+    fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", output);
+    output = "";
+  }
+
+  if (hide !== true && !program.silent) console.log();
+
+  return tmpFile ? fs.readFileSync(os.tmpdir() + "/enc_tmpfile", 'utf8') : output;
+}
+
+function quickcheck(password=-1, hash=null) {
+  let quickcheckCipher = SeededShuffle.shuffle(original.split(''), password).join('');
+  let helloworld = "SGVsbG8gV29ybGQ=";
+  
+  // no hash, so gen quickcheck from password
+  if (hash === null) {
+    let quickcheck = swap(helloworld, original, quickcheckCipher, true);
+    return quickcheck;
+  } else {
+    let quickcheck = swap(hash, quickcheckCipher, original, true);
+    return quickcheck === helloworld;
+  }
+}
