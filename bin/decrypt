@@ -80,9 +80,7 @@ function main(data, dim) {
     }
 
     // Retrieve data using translation table
-    if (!(data[i*4] === 255 && data[i*4 + 1] === 255 && data[i*4 + 2] === 255 && data[i*4 + 3] === 255)) {
-      content += `${chars[data[i*4]]}${chars[data[i*4+1]]}${chars[data[i*4+2]]}${chars[data[i*4+3]]}`;
-    }
+    content += `${chars[data[i*4]]}${chars[data[i*4+1]]}${chars[data[i*4+2]]}${chars[data[i*4+3]]}`;
 
     if (tmpFile && content.length >= 1000000) {
       fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", content);
