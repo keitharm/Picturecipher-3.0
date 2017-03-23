@@ -55,7 +55,7 @@ if (!program.silent) console.log("Reading input file...");
 // Convert read in file to base64
 let content;
 try {
-  content = base64(new Buffer(fs.readFileSync(options.args[0])));
+  content = base64(fs.readFileSync(options.args[0]));
 } catch(e) {
   console.error("Error".red + ": Invalid file provided");
   process.exit();
@@ -81,13 +81,13 @@ let file = new PNG({width: dim, height: dim});
 let total = dim*dim*4;
 
 // Generate meta data string
-let meta = base64(new Buffer([
+let meta = base64([
   version.replace(/\./g, '').toString(16).padStart(4, '0'),
   (~~(Date.now()/1000)).toString(16).padStart(8, '0'),
   String(quickcheckHash).slice(0, 15),
   String(checksum).slice(0, 16),
   (total-content.length-64).toString(16).padStart(5, '0')
-].join('')));
+].join(''));
 
 for (let i = 0; i < 16; i++) {
 
@@ -172,7 +172,7 @@ function quickcheck(password=-1, hash=null) {
 }
 
 function base64(input) {
-  input = input.toString('base64');
+  input = new Buffer(input).toString('base64');
   while (input.slice(-1) === '=') input = input.slice(0, -1);
   return input;
 }
