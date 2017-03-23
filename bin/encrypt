@@ -32,7 +32,7 @@ if (options.args.length < 1) {
 charm.cursor(false);
 
 // Base64 chars and translation table
-const original = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+const original = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const chars = {
   'A': 0,   'B': 4,   'C': 8,   'D': 12,  'E': 16,  'F': 20,
   'G': 24,  'H': 28,  'I': 32,  'J': 36,  'K': 40,  'L': 44,
@@ -44,7 +44,7 @@ const chars = {
   'q': 168, 'r': 172, 's': 176, 't': 180, 'u': 184, 'v': 188,
   'w': 192, 'x': 196, 'y': 200, 'z': 204, '0': 208, '1': 212,
   '2': 216, '3': 220, '4': 224, '5': 228, '6': 232, '7': 236,
-  '8': 240, '9': 244, '+': 248, '/': 252, '=': 255
+  '8': 240, '9': 244, '+': 248, '/': 252
 };
 
 // Shuffle original using provided seed to get cipher
@@ -55,7 +55,7 @@ if (!program.silent) console.log("Reading input file...");
 // Convert read in file to base64
 let content;
 try {
-  content = new Buffer(fs.readFileSync(options.args[0])).toString('base64');
+  content = base64(new Buffer(fs.readFileSync(options.args[0])));
 } catch(e) {
   console.error("Error".red + ": Invalid file provided");
   process.exit();
@@ -81,13 +81,13 @@ let file = new PNG({width: dim, height: dim});
 let total = dim*dim*4;
 
 // Generate meta data string
-let meta = new Buffer([
+let meta = base64(new Buffer([
   version.replace(/\./g, '').toString(16).padStart(4, '0'),
   (~~(Date.now()/1000)).toString(16).padStart(8, '0'),
-  String(quickcheckHash).slice(0, 16), 
+  String(quickcheckHash).slice(0, 15),
   String(checksum).slice(0, 16),
-  (total-content.length-64).toString(16).padStart(4, '0')
-].join('')).toString('base64');
+  (total-content.length-64).toString(16).padStart(5, '0')
+].join('')));
 
 for (let i = 0; i < 16; i++) {
 
@@ -159,7 +159,7 @@ function swap(input, from, to, hide=false) {
 
 function quickcheck(password=-1, hash=null) {
   let quickcheckCipher = SeededShuffle.shuffle(original.split(''), password).join('');
-  let helloworld = "SGVsbG8gV29ybGQ=";
+  let helloworld = "7WCnUWhDBjwNUWO";
   
   // no hash, so gen quickcheck from password
   if (hash === null) {
@@ -169,4 +169,10 @@ function quickcheck(password=-1, hash=null) {
     let quickcheck = swap(hash, quickcheckCipher, original, true);
     return quickcheck === helloworld;
   }
+}
+
+function base64(input) {
+  input = input.toString('base64');
+  while (input.slice(-1) === '=') input = input.slice(0, -1);
+  return input;
 }

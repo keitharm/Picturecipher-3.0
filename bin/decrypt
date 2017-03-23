@@ -30,7 +30,7 @@ if (options.args.length < 1) {
 charm.cursor(false);
 
 // Base64 chars and translation table
-const original = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+const original = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const chars = {
   '0':    'A', '4':   'B', '8':   'C', '12':  'D', '16':  'E', '20':  'F',
   '24':   'G', '28':  'H', '32':  'I', '36':  'J', '40':  'K', '44':  'L',
@@ -42,7 +42,7 @@ const chars = {
   '168':  'q', '172': 'r', '176': 's', '180': 't', '184': 'u', '188': 'v',
   '192':  'w', '196': 'x', '200': 'y', '204': 'z', '208': '0', '212': '1',
   '216':  '2', '220': '3', '224': '4', '228': '5', '232': '6', '236': '7',
-  '240':  '8', '244': '9', '248': '+', '252': '/', '255': '='
+  '240':  '8', '244': '9', '248': '+', '252': '/'
 };
 
 // Shuffle original using provided seed to get cipher
@@ -176,9 +176,9 @@ function decodeMeta(meta) {
   let info = {
     version: parseInt(raw.slice(0, 4), 16),
     timestamp: parseInt(raw.slice(4, 12), 16),
-    quickcheck: raw.slice(12, 28),
-    checksum: raw.slice(28, 44),
-    len: parseInt(raw.slice(44, 48), 16)
+    quickcheck: raw.slice(12, 27),
+    checksum: raw.slice(27, 43),
+    len: parseInt(raw.slice(43, 48), 16)
   };
 
   return info;
@@ -186,7 +186,7 @@ function decodeMeta(meta) {
 
 function quickcheck(password=-1, hash=null) {
   let quickcheckCipher = SeededShuffle.shuffle(original.split(''), password).join('');
-  let helloworld = "SGVsbG8gV29ybGQ=";
+  let helloworld = "7WCnUWhDBjwNUWO";
   
   // no hash, so gen quickcheck from password
   if (hash === null) {
