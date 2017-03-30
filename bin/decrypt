@@ -27,7 +27,7 @@ if (options.args.length < 1) {
   program.help();
 }
 
-charm.cursor(false);
+if (!program.silent) charm.cursor(false);
 
 // Base64 chars and translation table
 const original = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -61,8 +61,10 @@ try {
     main(data.data, data.width);
   });
 } catch(e) {
-  console.error("Error".red + ": Invalid Picturecipher file provided.");
-  process.exit();
+  if (!program.silent) {
+    console.error("Error".red + ": Invalid Picturecipher file provided.");
+  }
+  process.exit(2);
 }
 
 function main(data, dim) {
@@ -97,7 +99,7 @@ function main(data, dim) {
 
   if (!program.silent && passcheckResult) {
     console.error("Warning".red + ": Invalid password.");
-    process.exit();
+    process.exit(1);
   }
   for (;i < (len-meta.len-64)/4+16; i++) {
     // Show update every 1/100 complete
@@ -119,9 +121,11 @@ function main(data, dim) {
   }
   if (meta.len % 4 !== 0) job-=3;
 
-  charm.erase('line');
-  process.stdout.write("Deimagifying: [ 1 / 2 ] 100%");
-  charm.left(50);
+  if (!program.silent) {
+    charm.erase('line');
+    process.stdout.write("Deimagifying: [ 1 / 2 ] 100%");
+    charm.left(50);
+  }
 
   if (tmpFile && job > 0) {
     fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", new Buffer(content.slice(0, job)));
@@ -138,6 +142,7 @@ function main(data, dim) {
   let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
   if (!program.silent && meta.checksum !== checksum) {
     console.error("Warning".red + ": Picturecipher checksum didn't match. File may be corrupt.");
+    process.exitCode = 4;
   }
 
   // Convert from base64 and write file
@@ -175,7 +180,7 @@ function swap(input, from, to, hide=false) {
   }
 
   if (hide !== true && !program.silent) {
-    charm.cursor(true);
+    if (!program.silent) charm.cursor(true);
     console.log("\nWriting decrypted file...");
   }
   return tmpFile ? fs.readFileSync(os.tmpdir() + "/enc_tmpfile", 'utf8') : output;
