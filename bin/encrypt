@@ -25,7 +25,7 @@ let options = program
   .parse(process.argv);
 
 if (options.args.length < 1) {
-  console.error("Error".red + ": No file provided");
+  console.error("Error".red + ": No file provided.");
   program.help();
 }
 
@@ -57,12 +57,12 @@ let content;
 try {
   content = base64(fs.readFileSync(options.args[0]));
 } catch(e) {
-  console.error("Error".red + ": Invalid file provided");
+  console.error("Error".red + ": Invalid file provided.");
   process.exit();
 }
 
 // Use tmp file if file is large
-let tmpFile = content.length > 1000000;
+let tmpFile = content.length > 100000;
 
 // Calculate checksum
 let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
@@ -73,6 +73,12 @@ let quickcheckHash = quickcheck(options.args[1]);
 // Perform swap
 content = swap(content, original, cipher);
 
+// Save the last char for error correction on decode
+let lastChar = content.slice(-1);
+
+// Convert back to base64
+content = Buffer.from(content, 'base64');
+
 // Determine size of image file
 let len  = content.length;
 let dim  = Math.ceil(Math.sqrt((len + 64)/4)); // Calculate dimensions with meta data included
@@ -82,11 +88,12 @@ let total = dim*dim*4;
 
 // Generate meta data string
 let meta = base64([
-  version.replace(/\./g, '').toString(16).padStart(4, '0'),
+  version.replace(/\./g, '').toString(16).padStart(3, '0'),
   (~~(Date.now()/1000)).toString(16).padStart(8, '0'),
   String(quickcheckHash).slice(0, 15),
   String(checksum).slice(0, 16),
-  (total-content.length-64).toString(16).padStart(5, '0')
+  (total-content.length-64).toString(16).padStart(5, '0'),
+  lastChar
 ].join(''));
 
 for (let i = 0; i < 16; i++) {
@@ -99,22 +106,26 @@ for (let i = 0; i < 16; i++) {
   file.data[i*4 + 3] = chars[meta[i*4 + 3]];
 }
 
-for (let i = 0; i < total; i++) {
+for (let i = 0; i < (total-64)/4; i++) {
 
   // Show update every 1/100 complete
   if (!program.silent && i % ~~(total/100) === 1) {
     charm.erase('line');
-    process.stdout.write("Imagifying: [ 2 / 2 ] " + Math.ceil((i/total)*100) + "%");
+    process.stdout.write("Imagifying: [ 2 / 2 ] " + Math.ceil((i/((total-64)/4))*100) + "%");
     charm.left(50);
   }
 
   // Assign image data using translation table
   // Offset by 64 indices since meta data takes up 64 bytes
-  file.data[i*4 + 64] = chars[content[i*4]];
-  file.data[i*4 + 65] = chars[content[i*4 + 1]];
-  file.data[i*4 + 66] = chars[content[i*4 + 2]];
-  file.data[i*4 + 67] = chars[content[i*4 + 3]];
+  file.data[i*4 + 64] = content[i*4];
+  file.data[i*4 + 65] = content[i*4 + 1];
+  file.data[i*4 + 66] = content[i*4 + 2];
+  file.data[i*4 + 67] = content[i*4 + 3];
 }
+
+charm.erase('line');
+process.stdout.write("Imagifying: [ 2 / 2 ] 100%");
+charm.left(50);
 
 if (!program.silent) console.log("\nWriting encrypted file...");
 
@@ -141,7 +152,7 @@ function swap(input, from, to, hide=false) {
       charm.left(50);
     }
     output += to[from.indexOf(input[i])];
-    if (tmpFile && output.length >= 1000000) {
+    if (tmpFile && output.length >= 100000) {
       fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", output);
       output = "";
     }

@@ -23,7 +23,7 @@ let options = program
   .parse(process.argv);
 
 if (options.args.length < 1) {
-  console.error("Error".red + ": No file provided");
+  console.error("Error".red + ": No file provided.");
   program.help();
 }
 
@@ -57,48 +57,28 @@ try {
     if (error) throw error;
 
     // Use tmp file if file is large
-    tmpFile = data.data.length > 1000000;
+    tmpFile = data.data.length > 100000;
     main(data.data, data.width);
   });
 } catch(e) {
-  console.error("Error".red + ": Invalid Picturecipher file provided");
+  console.error("Error".red + ": Invalid Picturecipher file provided.");
   process.exit();
 }
 
 function main(data, dim) {
   if (tmpFile) fs.closeSync(fs.openSync(os.tmpdir() + "/enc_tmpfile", 'w'));
-  let content = "";
-  let len = program.meta ? 16 : data.length/4;
+  let meta = "";
+  let len = program.meta ? 64 : data.length;
+  let content = new Uint8Array(100000);
+  let job = 0;
+  let i;
 
-  for (let i = 0; i < len; i++) {
-
-    // Show update every 1/100 complete
-    if (!program.meta && !program.silent && i % ~~(data.length/4/100) === 1) {
-      charm.erase('line');
-      process.stdout.write("Deimagifying: [ 1 / 2 ] " + Math.ceil((i/data.length*4)*100) + "%");
-      charm.left(50);
-    }
-
-    // Retrieve data using translation table
-    content += `${chars[data[i*4]]}${chars[data[i*4+1]]}${chars[data[i*4+2]]}${chars[data[i*4+3]]}`;
-
-    if (tmpFile && content.length >= 1000000) {
-      fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", content);
-      content = "";
-    }
+  for (i = 0; i < 16; i++) {
+    meta += `${chars[data[i*4]]}${chars[data[i*4+1]]}${chars[data[i*4+2]]}${chars[data[i*4+3]]}`;
   }
-
-  if (tmpFile && content.length > 0) {
-    fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", content);
-    content = "";
-  }
-
-  if (!program.silent) console.log();
-
-  content = tmpFile ? fs.readFileSync(os.tmpdir() + "/enc_tmpfile", 'utf8') : content;
 
   // Extract meta data
-  let meta = decodeMeta(content.slice(0, 64));
+  meta = decodeMeta(meta);
 
   let quickcheckResult = !quickcheck(undefined, meta.quickcheck);
   let passcheckResult  = !quickcheck(options.args[1], meta.quickcheck);
@@ -111,24 +91,56 @@ function main(data, dim) {
     console.log(`Quickcheck Hash:       ${meta.quickcheck}`);
     console.log(`Checksum Hash:         ${meta.checksum}`);
     console.log(`Reverse Length Offset: ${meta.len}`);
+    console.log(`Last Char:             ${meta.lastChar}`);
     process.exit();
   }
 
-  if (passcheckResult) {
-    console.error("Warning".red + ": Invalid password..");
+  if (!program.silent && passcheckResult) {
+    console.error("Warning".red + ": Invalid password.");
     process.exit();
   }
+
+  for (;i < len/4; i++) {
+    // Show update every 1/100 complete
+    if (!program.silent && i % ~~(data.length/4/100) === 1) {
+      charm.erase('line');
+      process.stdout.write("Deimagifying: [ 1 / 2 ] " + Math.ceil((i/len)*400) + "%");
+      charm.left(50);
+    }
+    content[job]   = data[i*4];
+    content[job+1] = data[i*4+1];
+    content[job+2] = data[i*4+2];
+    content[job+3] = data[i*4+3];
+    job += 4;
+
+    if (tmpFile && job >= 100000) {
+      fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", new Buffer(content));
+      job = 0;
+    }
+  }
+
+  charm.erase('line');
+  process.stdout.write("Deimagifying: [ 1 / 2 ] 100%");
+  charm.left(50);
+
+  if (tmpFile && job > 0) {
+    fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", new Buffer(content.slice(0, job)));
+  }
+
+  if (!program.silent) console.log();
+
+  content = tmpFile ? new Uint8Array(fs.readFileSync(os.tmpdir() + "/enc_tmpfile")) : content.slice(0, job);
 
   // Perform swap
   if (meta.len === 0) {
-    content = swap(content.slice(64), cipher, original);
+    content = swap(base64(Buffer.from(content)).slice(0, -1) + meta.lastChar, cipher, original);
   } else {
-    content = swap(content.slice(64, -meta.len), cipher, original);
+    content = swap(base64(Buffer.from(content.slice(0, -meta.len))).slice(0, -1) + meta.lastChar, cipher, original);
   }
 
   // Checksum
   let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
-  if (meta.checksum !== checksum) {
+  if (!program.silent && meta.checksum !== checksum) {
     console.error("Warning".red + ": Picturecipher checksum didn't match. File may be corrupt.");
   }
 
@@ -155,7 +167,7 @@ function swap(input, from, to, hide=false) {
       charm.left(50);
     }
     output += to[from.indexOf(input[i])];
-    if (tmpFile && output.length >= 1000000) {
+    if (tmpFile && output.length >= 100000) {
       fs.appendFileSync(os.tmpdir() + "/enc_tmpfile", output);
       output = "";
     }
@@ -166,19 +178,22 @@ function swap(input, from, to, hide=false) {
     output = "";
   }
 
-  if (hide !== true && !program.silent) console.log("\nWriting decrypted file...");
-  charm.cursor(true);
+  if (hide !== true && !program.silent) {
+    charm.cursor(true);
+    console.log("\nWriting decrypted file...");
+  }
   return tmpFile ? fs.readFileSync(os.tmpdir() + "/enc_tmpfile", 'utf8') : output;
 }
 
 function decodeMeta(meta) {
   let raw = Buffer.from(meta, 'base64').toString();
   let info = {
-    version: parseInt(raw.slice(0, 4), 16),
-    timestamp: parseInt(raw.slice(4, 12), 16),
-    quickcheck: raw.slice(12, 27),
-    checksum: raw.slice(27, 43),
-    len: parseInt(raw.slice(43, 48), 16)
+    version: parseInt(raw.slice(0, 3), 16),
+    timestamp: parseInt(raw.slice(3, 11), 16),
+    quickcheck: raw.slice(11, 26),
+    checksum: raw.slice(26, 42),
+    len: parseInt(raw.slice(42, 47), 16),
+    lastChar: raw.slice(47, 48)
   };
 
   return info;
@@ -196,4 +211,10 @@ function quickcheck(password=-1, hash=null) {
     let quickcheck = swap(hash, quickcheckCipher, original, true);
     return quickcheck === helloworld;
   }
+}
+
+function base64(input) {
+  input = new Buffer(input).toString('base64');
+  while (input.slice(-1) === '=') input = input.slice(0, -1);
+  return input;
 }
