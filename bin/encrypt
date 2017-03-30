@@ -62,7 +62,7 @@ try {
 }
 
 // Use tmp file if file is large
-let tmpFile = content.length > 100000;
+let tmpFile = content.length >= 100000;
 
 // Calculate checksum
 let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
@@ -84,20 +84,19 @@ let len  = content.length;
 let dim  = Math.ceil(Math.sqrt((len + 64)/4)); // Calculate dimensions with meta data included
 let file = new PNG({width: dim, height: dim});
 
-let total = dim*dim*4;
+let total = dim*dim*4; // how many chars the png could possibly hold
 
-// Generate meta data string
+// Generate meta data string (64 chars long)
 let meta = base64([
   version.replace(/\./g, '').toString(16).padStart(3, '0'),
   (~~(Date.now()/1000)).toString(16).padStart(8, '0'),
   String(quickcheckHash).slice(0, 15),
   String(checksum).slice(0, 16),
-  (total-content.length-64).toString(16).padStart(5, '0'),
+  (total-content.length-64).toString(16).padStart(5, '0'), // calculate unused pixels (each pixel holds 4 chars)
   lastChar
 ].join(''));
 
 for (let i = 0; i < 16; i++) {
-
   // Assign image data using translation table
   // Offset by 64 indices since meta data takes up 64 bytes
   file.data[i*4]     = chars[meta[i*4]];
@@ -106,7 +105,7 @@ for (let i = 0; i < 16; i++) {
   file.data[i*4 + 3] = chars[meta[i*4 + 3]];
 }
 
-for (let i = 0; i < (total-64)/4; i++) {
+for (let i = 0; i < content.length/4; i++) {
 
   // Show update every 1/100 complete
   if (!program.silent && i % ~~(total/100) === 1) {
