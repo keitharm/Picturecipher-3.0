@@ -8,6 +8,7 @@ const crypto = require('crypto');
 
 const PNG     = require("pngjs").PNG;
 const program = require('commander');
+const seedrandom = require('seedrandom');
 const SeededShuffle = require('seededshuffle');
 
 // Control Cursor
@@ -48,6 +49,7 @@ const chars = {
 // Shuffle original using provided seed to get cipher
 const cipher = SeededShuffle.shuffle(original.split(''), (options.args[1] || -1)).join('');
 let tmpFile;
+let meta;
 
 if (!program.silent) console.log("Reading encrypted file...");
 
@@ -68,13 +70,13 @@ try {
 }
 
 function main(data, dim) {
-  let meta = "";
+  meta = "";
   let len = data.length;
   let content = new Uint8Array(100000);
   let job = 0;
   let i;
 
-  for (i = 0; i < 16; i++) {
+  for (i = 0; i < 17; i++) {
     meta += `${chars[data[i*4]]}${chars[data[i*4+1]]}${chars[data[i*4+2]]}${chars[data[i*4+3]]}`;
   }
 
@@ -94,6 +96,7 @@ function main(data, dim) {
     console.log(`Checksum Hash:         ${meta.checksum}`);
     console.log(`Reverse Length Offset: ${meta.len}`);
     console.log(`Last Char:             ${meta.lastChar}`);
+    console.log(`Level:                 ${meta.level}`);
     process.exit();
   }
 
@@ -102,14 +105,14 @@ function main(data, dim) {
     process.exit(1);
   }
 
-  for (let i = 0; i < len-64-meta.len; i++) {
+  for (let i = 0; i < len-68-meta.len; i++) {
     // Show update every 1/100 complete
     if (!program.silent && i % ~~(data.length/4/100) === 1) {
       charm.erase('line');
       process.stdout.write("Deimagifying: [ 1 / 2 ] " + Math.ceil((i/len)*100) + "%");
       charm.left(50);
     }
-    content[job] = data[64 + i];
+    content[job] = data[68 + i];
     job++;
 
     if (tmpFile && job >= 100000) {
@@ -131,8 +134,12 @@ function main(data, dim) {
   if (!program.silent) console.log();
   content = tmpFile ? new Uint8Array(fs.readFileSync(os.tmpdir() + "/enc_tmpfile")) : content.slice(0, job);
 
-  // Perform swap
-  content = swap(base64(Buffer.from(content)).slice(0, -1) + meta.lastChar, cipher, original);
+  if (meta.level !== 4) {
+    content = selectSwap(base64(Buffer.from(content)).slice(0, -1) + meta.lastChar, cipher, original);
+  } else {
+    // Perform swap
+    content = swap(base64(Buffer.from(content)).slice(0, -1) + meta.lastChar, cipher, original);
+  }
 
   // Checksum
   let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
@@ -149,6 +156,20 @@ function getRandomInt(min, max) {
   min = Math.ceil(min);
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min)) + min;
+}
+
+function selectSwap(input, from, to) {
+  let rng = seedrandom(meta.quickcheckHash);
+  let len = input.length;
+
+  for (let i = 0; i < 10000*Math.pow(10, meta.level-1); i++) {
+    let index = Math.floor(rng() * len);
+    //console.log(index);
+    input[index] = to[from.indexOf(input[index])];
+  };
+
+  console.log("\nWriting decrypted file...");
+  return input;
 }
 
 function swap(input, from, to, hide=false) {
@@ -190,7 +211,8 @@ function decodeMeta(meta) {
     quickcheck: raw.slice(11, 26),
     checksum: raw.slice(26, 42),
     len: parseInt(raw.slice(42, 47), 16),
-    lastChar: raw.slice(47, 48)
+    lastChar: raw.slice(47, 48),
+    level: parseInt(raw.slice(48, 51))
   };
 
   return info;

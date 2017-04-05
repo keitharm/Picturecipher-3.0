@@ -1,6 +1,6 @@
 {
   "name": "picturecipher",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "bin": {
     "encrypt": "./bin/encrypt",
     "decrypt": "./bin/decrypt"
@@ -12,9 +12,9 @@
     "charm": "^1.0.2",
     "colors": "^1.1.2",
     "commander": "^2.9.0",
-    "openpgp": "^2.4.0",
     "pngjs": "^3.0.1",
-    "seededshuffle": "^0.1.1"
+    "seededshuffle": "^0.1.1",
+    "seedrandom": "^2.4.2"
   },
   "devDependencies": {},
   "scripts": {

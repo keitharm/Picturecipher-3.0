@@ -9,6 +9,7 @@ const crypto = require('crypto');
 
 const PNG     = require("pngjs").PNG;
 const program = require('commander');
+const seedrandom = require('seedrandom');
 const SeededShuffle = require('seededshuffle');
 
 const version = require('../package.json').version;
@@ -21,6 +22,7 @@ let options = program
   .version(version)
   .usage('file [password]')
   .description("Picturecipher encryption tool")
+  .option('-l, --level [num]', 'Security level (1 = worst/fastest, 4 = best/slowest; default is 4)')
   .option('-s, --silent', 'Hides progress output')
   .parse(process.argv);
 
@@ -66,14 +68,21 @@ try {
 // Use tmp file if file is large
 let tmpFile = content.length >= 100000;
 
+// Level
+let level = Number((program.level < 5 && program.level > 0) ? program.level : 4);
+
 // Calculate checksum
 let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
 
 // Calculate quickcheck
 let quickcheckHash = quickcheck(options.args[1]);
 
-// Perform swap
-content = swap(content, original, cipher);
+if (level !== 4) {
+  content = selectSwap(content, original, cipher);
+} else {
+  // Perform swap
+  content = swap(content, original, cipher);
+}
 
 // Save the last char for error correction on decode
 let lastChar = content.slice(-1);
@@ -83,24 +92,25 @@ content = Buffer.from(content, 'base64');
 
 // Determine size of image file
 let len  = content.length;
-let dim  = Math.ceil(Math.sqrt((len + 64)/4)); // Calculate dimensions with meta data included
+let dim  = Math.ceil(Math.sqrt((len + 68)/4)); // Calculate dimensions with meta data included
 let file = new PNG({width: dim, height: dim});
 
 let total = dim*dim*4; // how many chars the png could possibly hold
 
-// Generate meta data string (64 chars long)
+// Generate meta data string (68 chars long)
 let meta = base64([
   version.replace(/\./g, '').toString(16).padStart(3, '0'),
   (~~(Date.now()/1000)).toString(16).padStart(8, '0'),
   String(quickcheckHash).slice(0, 15),
   String(checksum).slice(0, 16),
-  (total-content.length-64).toString(16).padStart(5, '0'), // calculate unused pixels (each pixel holds 4 chars)
-  lastChar
+  (total-content.length-68).toString(16).padStart(5, '0'), // calculate unused pixels (each pixel holds 4 chars)
+  lastChar,
+  (level).toString(16).padStart(3, '0'),
 ].join(''));
 
-for (let i = 0; i < 16; i++) {
+for (let i = 0; i < 17; i++) {
   // Assign image data using translation table
-  // Offset by 64 indices since meta data takes up 64 bytes
+  // Offset by 68 indices since meta data takes up 68 bytes
   file.data[i*4]     = chars[meta[i*4]];
   file.data[i*4 + 1] = chars[meta[i*4 + 1]];
   file.data[i*4 + 2] = chars[meta[i*4 + 2]];
@@ -117,11 +127,11 @@ for (let i = 0; i < Math.ceil(content.length/4); i++) {
   }
 
   // Assign image data using translation table
-  // Offset by 64 indices since meta data takes up 64 bytes
-  file.data[i*4 + 64] = content[i*4]     ? content[i*4]     : 0;
-  file.data[i*4 + 65] = content[i*4 + 1] ? content[i*4 + 1] : 0;
-  file.data[i*4 + 66] = content[i*4 + 2] ? content[i*4 + 2] : 0;
-  file.data[i*4 + 67] = content[i*4 + 3] ? content[i*4 + 3] : 0;
+  // Offset by 68 indices since meta data takes up 68 bytes
+  file.data[i*4 + 68] = content[i*4]     ? content[i*4]     : 0;
+  file.data[i*4 + 69] = content[i*4 + 1] ? content[i*4 + 1] : 0;
+  file.data[i*4 + 70] = content[i*4 + 2] ? content[i*4 + 2] : 0;
+  file.data[i*4 + 71] = content[i*4 + 3] ? content[i*4 + 3] : 0;
 }
 
 if (!program.silent) {
@@ -140,6 +150,19 @@ function getRandomInt(min, max) {
   min = Math.ceil(min);
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min)) + min;
+}
+
+function selectSwap(input, from, to) {
+  let rng = seedrandom(quickcheckHash);
+  let len = input.length;
+
+  for (let i = 0; i < 10000*Math.pow(10, level-1); i++) {
+    let index = Math.floor(rng() * len);
+    //console.log(index);
+    input[index] = to[from.indexOf(input[index])];
+  };
+
+  return input;
 }
 
 function swap(input, from, to, hide=false) {
