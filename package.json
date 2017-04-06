@@ -1,6 +1,6 @@
 {
   "name": "picturecipher",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "bin": {
     "encrypt": "./bin/encrypt",
     "decrypt": "./bin/decrypt"

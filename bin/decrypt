@@ -65,6 +65,7 @@ try {
 } catch(e) {
   if (!program.silent) {
     console.error("Error".red + ": Invalid Picturecipher file provided.");
+    charm.cursor(true);
   }
   process.exit(2);
 }
@@ -102,6 +103,7 @@ function main(data, dim) {
 
   if (!program.silent && passcheckResult) {
     console.error("Warning".red + ": Invalid password.");
+    charm.cursor(true);
     process.exit(1);
   }
 
@@ -145,6 +147,7 @@ function main(data, dim) {
   let checksum = crypto.createHash('md5').update(content).digest("hex").slice(0, 16);
   if (!program.silent && meta.checksum !== checksum) {
     console.error("Warning".red + ": Picturecipher checksum didn't match. File may be corrupt.");
+    charm.cursor(true);
     process.exitCode = 4;
   }
 
@@ -161,8 +164,16 @@ function getRandomInt(min, max) {
 function selectSwap(input, from, to) {
   let rng = seedrandom(meta.quickcheckHash);
   let len = input.length;
+  let loopLen = 10000*Math.pow(10, meta.level-1);
 
-  for (let i = 0; i < 10000*Math.pow(10, meta.level-1); i++) {
+  for (let i = 0; i < loopLen; i++) {
+
+    if (!program.silent && i % ~~(loopLen/100) === 1) {
+      charm.erase('line');
+      process.stdout.write("Swap:         [ 2 / 2 ] " + Math.ceil((i/loopLen)*100) + "%");
+      charm.left(50);
+    }
+
     let index = Math.floor(rng() * len);
     //console.log(index);
     input[index] = to[from.indexOf(input[index])];
